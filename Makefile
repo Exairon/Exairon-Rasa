@@ -227,7 +227,6 @@ release:
 	poetry run python scripts/release.py
 
 build-docker:
-	export IMAGE_NAME=rasa && \
 	docker buildx use default && \
 	docker buildx bake -f docker/docker-bake.hcl base && \
 	docker buildx bake -f docker/docker-bake.hcl base-poetry && \
@@ -235,7 +234,6 @@ build-docker:
 	docker buildx bake -f docker/docker-bake.hcl default
 
 build-docker-full:
-	export IMAGE_NAME=rasa && \
 	docker buildx use default && \
 	docker buildx bake -f docker/docker-bake.hcl base-images && \
 	docker buildx bake -f docker/docker-bake.hcl base-builder && \

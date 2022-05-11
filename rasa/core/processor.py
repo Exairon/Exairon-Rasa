@@ -847,19 +847,47 @@ class MessageProcessor:
         if events is None:
             events = []
 
+        last_message_id = tracker.latest_message.message_id
+
         self._warn_about_new_slots(tracker, action.name(), events)
 
         action_was_rejected_manually = any(
             isinstance(event, ActionExecutionRejected) for event in events
         )
         if not action_was_rejected_manually:
+            logger.debug(f"Prediction: '{prediction}'")
             logger.debug(f"Policy prediction ended with events '{prediction.events}'.")
+            
+            if(last_message_id is not None):
+                # Add last user messages id to events
+                for e in prediction.events:
+                    if(e.metadata is not None):
+                        e.metadata['em_message_id'] = tracker.latest_message.message_id
+                    else:
+                        e.metadata = {'em_message_id': tracker.latest_message.message_id}
+
             tracker.update_with_events(prediction.events, self.domain)
 
+            if(last_message_id is not None):
+                # Add last user messages id to events
+                if(prediction.action_metadata is not None):
+                    prediction.action_metadata['em_message_id'] = tracker.latest_message.message_id
+                else:
+                    prediction.action_metadata = {'em_message_id': tracker.latest_message.message_id}
+            
             # log the action and its produced events
             tracker.update(action.event_for_successful_execution(prediction))
 
         logger.debug(f"Action '{action.name()}' ended with events '{events}'.")
+        
+        if(last_message_id is not None):
+            # Add last user messages id to events
+            for e in events:
+                if(e.metadata is not None):
+                    e.metadata['em_message_id'] = tracker.latest_message.message_id
+                else:
+                    e.metadata = {'em_message_id': tracker.latest_message.message_id}
+  
         tracker.update_with_events(events, self.domain)
 
     def _has_session_expired(self, tracker: DialogueStateTracker) -> bool:

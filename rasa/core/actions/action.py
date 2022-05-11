@@ -180,8 +180,12 @@ def action_for_name_or_text(
     return RemoteAction(action_name_or_text, action_endpoint)
 
 
-def create_bot_utterance(message: Dict[Text, Any]) -> BotUttered:
+def create_bot_utterance(message: Dict[Text, Any], tracker: "DialogueStateTracker") -> BotUttered:
     """Create BotUttered event from message."""
+
+    logger.debug("Creating bot utterance for message: %s", message)
+
+    message['em_message_id'] = tracker.latest_message.message_id
 
     bot_message = BotUttered(
         text=message.pop("text", None),
@@ -290,7 +294,7 @@ class ActionBotResponse(Action):
             return []
         message["utter_action"] = self.utter_action
 
-        return [create_bot_utterance(message)]
+        return [create_bot_utterance(message, tracker)]
 
     def name(self) -> Text:
         """Returns action name."""
@@ -323,7 +327,7 @@ class ActionEndToEndResponse(Action):
     ) -> List[Event]:
         """Runs action (see parent class for full docstring)."""
         message = {"text": self.action_text}
-        return [create_bot_utterance(message)]
+        return [create_bot_utterance(message, tracker)]
 
     def event_for_successful_execution(
         self, prediction: PolicyPrediction
@@ -655,7 +659,7 @@ class RemoteAction(Action):
             # Avoid overwriting `draft` values with empty values
             response = {k: v for k, v in response.items() if v}
             draft.update(response)
-            bot_messages.append(create_bot_utterance(draft))
+            bot_messages.append(create_bot_utterance(draft, tracker))
 
         return bot_messages
 
@@ -906,7 +910,7 @@ class ActionDefaultAskAffirmation(Action):
             "utter_action": self.name(),
         }
 
-        return [create_bot_utterance(message)]
+        return [create_bot_utterance(message, tracker)]
 
 
 class ActionDefaultAskRephrase(ActionBotResponse):
