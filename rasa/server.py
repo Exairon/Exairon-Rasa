@@ -62,6 +62,9 @@ from rasa.core.channels.channel import (
     OutputChannel,
     UserMessage,
 )
+from rasa.core.channels.rest import (
+    ExaironOutputChannel,
+)
 import rasa.shared.core.events
 from rasa.shared.core.events import Event
 from rasa.core.lock_store import LockStore
@@ -1425,6 +1428,8 @@ def _get_output_channel(
     """
     requested_output_channel = request.args.get(OUTPUT_CHANNEL_QUERY_KEY)
 
+    logger.debug(f"Requested output channel '{requested_output_channel}'.")
+    
     if (
         requested_output_channel == USE_LATEST_INPUT_CHANNEL_AS_OUTPUT_CHANNEL
         and tracker
@@ -1446,7 +1451,7 @@ def _get_output_channel(
             input_channel.get_output_channel() or output_channel_created_so_far
         ),
         matching_channels,
-        CollectingOutputChannel(),
+        ExaironOutputChannel(),
     )
 
 

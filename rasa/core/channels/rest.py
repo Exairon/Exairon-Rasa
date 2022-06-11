@@ -6,7 +6,7 @@ from asyncio import Queue, CancelledError
 from sanic import Blueprint, response
 from sanic.request import Request
 from sanic.response import HTTPResponse
-from typing import Text, Dict, Any, Optional, Callable, Awaitable, NoReturn
+from typing import Text, Dict, Any, Optional, Callable, Awaitable, NoReturn, List
 
 import rasa.utils.endpoints
 from rasa.core.channels.channel import (
@@ -48,6 +48,20 @@ class RestInput(InputChannel):
 
         await queue.put("DONE")
 
+    def get_metadata(self, request: Request) -> Dict[Text, Any]:
+        """Extracts the metadata 
+        Args:
+            request: A `Request` object that contains Exairon Messenger Metadata.
+        Returns:
+            Metadata extracted from the sent event payload.
+        """
+        em_event = request.json
+        em_message_id = em_event.get("em_message_id", {})
+
+        return {
+            "em_message_id": em_message_id,
+        }
+
     async def _extract_sender(self, req: Request) -> Optional[Text]:
         return req.json.get("sender", None)
 
@@ -57,6 +71,9 @@ class RestInput(InputChannel):
 
     def _extract_input_channel(self, req: Request) -> Text:
         return req.json.get("input_channel") or self.name()
+
+    def _extract_output_channel(self, req: Request) -> Text:
+        return req.json.get("output_channel") or self.name()
 
     def stream_response(
         self,
@@ -104,6 +121,7 @@ class RestInput(InputChannel):
                 request, "stream", default=False
             )
             input_channel = self._extract_input_channel(request)
+            output_channel = self._extract_output_channel(request)
             metadata = self.get_metadata(request)
 
             if should_use_stream:
@@ -114,17 +132,21 @@ class RestInput(InputChannel):
                     content_type="text/event-stream",
                 )
             else:
-                collector = CollectingOutputChannel()
+                collector = ExaironOutputChannel(output_channel)
+
+                message = UserMessage(
+                    text,
+                    collector,
+                    sender_id,
+                    input_channel=input_channel,
+                    metadata=metadata,
+                    message_id=metadata['em_message_id']
+                )
+
                 # noinspection PyBroadException
                 try:
                     await on_new_message(
-                        UserMessage(
-                            text,
-                            collector,
-                            sender_id,
-                            input_channel=input_channel,
-                            metadata=metadata,
-                        )
+                        message
                     )
                 except CancelledError:
                     logger.error(
@@ -135,6 +157,10 @@ class RestInput(InputChannel):
                         f"An exception occured while handling "
                         f"user message '{text}'."
                     )
+
+                for m in collector.messages:
+                    m['em_message_id'] = message.metadata['em_message_id']
+
                 return response.json(collector.messages)
 
         return custom_webhook
@@ -159,3 +185,77 @@ class QueueOutputChannel(CollectingOutputChannel):
 
     async def _persist_message(self, message: Dict[Text, Any]) -> None:
         await self.messages.put(message)
+
+class ExaironOutputChannel(CollectingOutputChannel):
+    """Output channel that collects send messages in a list
+
+    (doesn't send them anywhere, just collects them)."""
+
+    # @classmethod
+    def name(self) -> Text:
+        """Name of ExaironOutputChannel."""
+        return self.output_channel or "collector"
+
+    def __init__(self, output_channel: Optional[Text] = None) -> None:
+        self.output_channel = output_channel
+        super().__init__()
+
+    async def send_response(self, recipient_id: Text, message: Dict[Text, Any]) -> None:
+        """Send a message to the client."""
+
+        if message.get("quick_replies"):
+            await self.send_quick_replies(
+                recipient_id,
+                message.pop("text"),
+                message.pop("quick_replies"),
+                **message,
+            )
+        elif message.get("buttons") and message.get("custom"):
+            await self.send_text_with_buttons(
+                recipient_id, message.pop("text"), message.pop("buttons"), message.pop("custom"), **message
+            )
+        elif message.get("buttons"):
+            await self.send_text_with_buttons(
+                recipient_id, message.pop("text"), message.pop("buttons"), None, **message
+            )
+        elif message.get("image"):
+            await self.send_image_url(recipient_id, message.pop("image"), message.pop("text"), **message)
+        elif message.get("text"):
+            await self.send_text_message(recipient_id, message.pop("text"), **message)
+
+        if message.get("custom"):
+            await self.send_custom_json(recipient_id, message.pop("custom"), **message)
+
+        # if there is an image we handle it separately as an attachment
+        # if message.get("image"):
+        #     await self.send_image_url(recipient_id, message.pop("image"), **message)
+
+        if message.get("attachment"):
+            await self.send_attachment(
+                recipient_id, message.pop("attachment"), **message
+            )
+
+        if message.get("elements"):
+            await self.send_elements(recipient_id, message.pop("elements"), **message)
+
+    async def send_image_url(
+        self, recipient_id: Text, image: Text, text: Text, **kwargs: Any
+    ) -> None:
+        """Sends an image. Default will just post the url as a string."""
+        if (text):
+            await self._persist_message(self._message(recipient_id, image=image, text=text))
+        else:
+            await self._persist_message(self._message(recipient_id, image=image))
+
+    async def send_text_with_buttons(
+        self,
+        recipient_id: Text,
+        text: Text,
+        buttons: List[Dict[Text, Any]],
+        json_message: Optional[Dict[Text, Any]] = None,
+        **kwargs: Any,
+    ) -> None:
+        if (json_message):
+            await self._persist_message(self._message(recipient_id, text=text, buttons=buttons, custom=json_message))
+        else:
+            await self._persist_message(self._message(recipient_id, text=text, buttons=buttons))
