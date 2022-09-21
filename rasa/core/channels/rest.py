@@ -203,14 +203,7 @@ class ExaironOutputChannel(CollectingOutputChannel):
     async def send_response(self, recipient_id: Text, message: Dict[Text, Any]) -> None:
         """Send a message to the client."""
 
-        if message.get("quick_replies"):
-            await self.send_quick_replies(
-                recipient_id,
-                message.pop("text"),
-                message.pop("quick_replies"),
-                **message,
-            )
-        elif message.get("buttons") and message.get("custom"):
+        if message.get("buttons") and message.get("custom"):
             await self.send_text_with_buttons(
                 recipient_id, message.pop("text"), message.pop("buttons"), message.pop("custom"), **message
             )
@@ -218,8 +211,12 @@ class ExaironOutputChannel(CollectingOutputChannel):
             await self.send_text_with_buttons(
                 recipient_id, message.pop("text"), message.pop("buttons"), None, **message
             )
+        elif message.get("image") and message.get("custom"):
+            await self.send_image_url(recipient_id, message.pop("image"), message.pop("text"), message.pop("custom"), **message)
         elif message.get("image"):
             await self.send_image_url(recipient_id, message.pop("image"), message.pop("text"), **message)
+        elif message.get("text") and message.get("custom"):
+            await self.send_text_message(recipient_id, message.pop("text"), message.pop("custom"), **message)
         elif message.get("text"):
             await self.send_text_message(recipient_id, message.pop("text"), **message)
 
@@ -239,10 +236,12 @@ class ExaironOutputChannel(CollectingOutputChannel):
             await self.send_elements(recipient_id, message.pop("elements"), **message)
 
     async def send_image_url(
-        self, recipient_id: Text, image: Text, text: Text, **kwargs: Any
+        self, recipient_id: Text, image: Text, text: Text, json_message: Optional[Dict[Text, Any]] = None, **kwargs: Any
     ) -> None:
         """Sends an image. Default will just post the url as a string."""
-        if (text):
+        if (text and json_message):
+            await self._persist_message(self._message(recipient_id, image=image, text=text, custom=json_message))
+        elif (text):
             await self._persist_message(self._message(recipient_id, image=image, text=text))
         else:
             await self._persist_message(self._message(recipient_id, image=image))
@@ -259,3 +258,12 @@ class ExaironOutputChannel(CollectingOutputChannel):
             await self._persist_message(self._message(recipient_id, text=text, buttons=buttons, custom=json_message))
         else:
             await self._persist_message(self._message(recipient_id, text=text, buttons=buttons))
+
+    async def send_text_message(
+        self, recipient_id: Text, text: Text, json_message: Optional[Dict[Text, Any]] = None, **kwargs: Any
+    ) -> None:
+        if (json_message):
+            await self._persist_message(self._message(recipient_id, text=text, custom=json_message))
+        else:
+            for message_part in text.strip().split("\n\n"):
+                await self._persist_message(self._message(recipient_id, text=message_part))
