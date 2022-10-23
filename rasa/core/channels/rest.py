@@ -265,5 +265,6 @@ class ExaironOutputChannel(CollectingOutputChannel):
         if (json_message):
             await self._persist_message(self._message(recipient_id, text=text, custom=json_message))
         else:
-            for message_part in text.strip().split("\n\n"):
-                await self._persist_message(self._message(recipient_id, text=message_part))
+            await self._persist_message(self._message(recipient_id, text=text))
+            # for message_part in text.strip().split("\n\n"):
+            #     await self._persist_message(self._message(recipient_id, text=message_part))
