@@ -57,9 +57,11 @@ class RestInput(InputChannel):
         """
         em_event = request.json
         em_message_id = em_event.get("em_message_id", {})
+        em_metadata = em_event.get("em_metadata", {})
 
         return {
             "em_message_id": em_message_id,
+            "em_metadata": em_metadata,
         }
 
     async def _extract_sender(self, req: Request) -> Optional[Text]:
