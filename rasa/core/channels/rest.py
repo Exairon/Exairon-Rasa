@@ -220,17 +220,21 @@ class ExaironOutputChannel(CollectingOutputChannel):
         elif message.get("text"):
             await self.send_text_message(recipient_id, message.pop("text"), **message)
 
-        if message.get("custom"):
-            await self.send_custom_json(recipient_id, message.pop("custom"), **message)
-
         # if there is an image we handle it separately as an attachment
         # if message.get("image"):
         #     await self.send_image_url(recipient_id, message.pop("image"), **message)
 
-        if message.get("attachment"):
+        if message.get("attachment") and message.get("custom"):
+            await self.send_attachment(
+                recipient_id, message.pop("attachment"), message.pop("custom"), **message
+            )
+        elif message.get("attachment"):
             await self.send_attachment(
                 recipient_id, message.pop("attachment"), **message
             )
+
+        if message.get("custom"):
+            await self.send_custom_json(recipient_id, message.pop("custom"), **message)
 
         if message.get("elements"):
             await self.send_elements(recipient_id, message.pop("elements"), **message)
@@ -268,3 +272,13 @@ class ExaironOutputChannel(CollectingOutputChannel):
             await self._persist_message(self._message(recipient_id, text=text))
             # for message_part in text.strip().split("\n\n"):
             #     await self._persist_message(self._message(recipient_id, text=message_part))
+
+    async def send_attachment(
+        self, recipient_id: Text, attachment: Text, json_message: Optional[Dict[Text, Any]] = None, **kwargs: Any
+    ) -> None:
+        """Sends an attachment. Default will just post as a string."""
+        if (json_message):
+            await self._persist_message(self._message(recipient_id, attachment=attachment, custom=json_message))
+        else:
+            await self._persist_message(self._message(recipient_id, attachment=attachment))
+            
