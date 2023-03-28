@@ -49,6 +49,7 @@ from rasa.shared.core.events import (
     ActiveLoop,
     Restarted,
     SessionStarted,
+    FollowupAction,
 )
 from rasa.shared.utils.schemas.events import EVENTS_SCHEMA
 from rasa.utils.endpoints import EndpointConfig, ClientResponseError
@@ -503,8 +504,24 @@ class ActionSessionStart(Action):
         return [
             SlotSet(key=event.key, value=event.value, metadata=event.metadata)
             for event in tracker.applied_events()
-            if isinstance(event, SlotSet)
+            if isinstance(event, SlotSet) and event.key is not "session_started_metadata"
         ]
+
+    @staticmethod
+    def fetch_em_metadata_slots(metadata: Optional[Dict[Text, Any]]) -> List["SlotSet"]:
+        """Set exairon default slots from em_metadata"""
+
+        slots = []
+
+        if metadata is not None:
+            # Grab slots from metadata
+            for key, value in metadata.items():
+                if key == "em_metadata" and value is not None:
+                    em_metadata = value
+                    for _key, _value in em_metadata.items():
+                        if _value is not None:
+                            slots.append(SlotSet(key=_key, value=_value))
+        return slots
 
     async def run(
         self,
@@ -518,6 +535,9 @@ class ActionSessionStart(Action):
 
         if domain.session_config.carry_over_slots:
             _events.extend(self._slot_set_events_from_tracker(tracker))
+
+        if self.metadata is not None:
+            _events.extend(self.fetch_em_metadata_slots(self.metadata))
 
         _events.append(ActionExecuted(ACTION_LISTEN_NAME))
 
