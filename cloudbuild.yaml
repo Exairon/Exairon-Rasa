@@ -26,8 +26,8 @@ steps:
   args:
   - '-c'
   - |
-    docker tag rasa/rasa:localdev europe-north1-docker.pkg.dev/exairon/apps/exairon-rasa-base:$_VERSION
-    docker push europe-north1-docker.pkg.dev/exairon/apps/exairon-rasa-base:$_VERSION
+    docker tag rasa/rasa:localdev europe-north1-docker.pkg.dev/exairon/apps/$_IMAGE:$_VERSION
+    docker push europe-north1-docker.pkg.dev/exairon/apps/$_IMAGE:$_VERSION
   env:
   - 'DOCKER_CLI_EXPERIMENTAL=enabled'
 
