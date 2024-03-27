@@ -1,6 +1,36 @@
-timeout: "1200s"
 steps:
+# Setup Docker Buildx
 - name: 'gcr.io/cloud-builders/docker'
-  id: 'docker-build'
-  args: ['build', '--file', './docker/Dockerfile.full', '-t', '$_IMAGE_REPO:$_VERSION', '.']
-images: ['$_IMAGE_REPO:$_VERSION']
+  entrypoint: 'bash'
+  args:
+  - '-c'
+  - |
+    # Setup qemu and create a new buildx builder which is used for multi-architecture builds
+    docker run --privileged --rm tonistiigi/binfmt --install all
+    docker buildx create --name mybuilder --use
+    docker buildx use default
+
+- name: 'gcr.io/cloud-builders/docker'
+  # Execute Docker Buildx Bake commands
+  entrypoint: 'bash'
+  args:
+  - '-c'
+  - |
+    docker buildx bake -f docker/docker-bake.hcl base-images
+    docker buildx bake -f docker/docker-bake.hcl base-builder
+    docker buildx bake -f docker/docker-bake.hcl full
+
+- name: 'gcr.io/cloud-builders/docker'
+  # Tag and Push the image
+  entrypoint: 'bash'
+  args:
+  - '-c'
+  - |
+    docker tag rasa/rasa:localdev europe-north1-docker.pkg.dev/exairon/apps/exairon-rasa:1.1.17
+    docker push europe-north1-docker.pkg.dev/exairon/apps/exairon-rasa:1.1.17
+  env:
+  - 'DOCKER_CLI_EXPERIMENTAL=enabled'
+
+options:
+  env:
+  - 'DOCKER_CLI_EXPERIMENTAL=enabled'
