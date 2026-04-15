@@ -446,6 +446,7 @@ class Interpreter:
         text: Text,
         time: Optional[datetime.datetime] = None,
         only_output_properties: bool = True,
+        tracker: Optional[Any] = None,
     ) -> Dict[Text, Any]:
         """Parse the input text, classify it and return pipeline result.
 
@@ -466,8 +467,13 @@ class Interpreter:
 
         message = Message(data=data, time=timestamp)
 
+        # Create enhanced context with tracker
+        enhanced_context = self.context.copy()
+        if tracker:
+            enhanced_context["tracker"] = tracker
+
         for component in self.pipeline:
-            component.process(message, **self.context)
+            component.process(message, **enhanced_context)
 
         if not self.has_already_warned_of_overlapping_entities:
             self.warn_of_overlapping_entities(message)

@@ -1323,11 +1323,17 @@ def create_app(
         emulation_mode = request.args.get("emulation_mode")
         emulator = _create_emulator(emulation_mode)
 
+        sender_id = request.args.get("sender_id")
+
+        tracker = app.ctx.agent.tracker_store.retrieve(sender_id)
+        
+        logger.info(f"Tracker in server.py: {tracker.__dict__}")
+
         try:
             data = emulator.normalise_request_json(request.json)
             try:
                 parsed_data = await app.ctx.agent.parse_message_using_nlu_interpreter(
-                    data.get("text")
+                    data.get("text"), tracker
                 )
             except Exception as e:
                 logger.debug(traceback.format_exc())
